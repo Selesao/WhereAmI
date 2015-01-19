@@ -9,7 +9,7 @@
 #import "XYZLocationLogger.h"
 #import <CoreLocation/CoreLocation.h>
 
-#define CHECK_TIME_INTERVAL 3.0f
+#define CHECK_TIME_INTERVAL 60.0f
 
 
 @interface XYZLocationLogger() <CLLocationManagerDelegate>
@@ -27,6 +27,7 @@
 
 + (instancetype)sharedInstance
 {
+    //Creating Singleton to prevent ARC from releasing instance of LocationLogger
     static XYZLocationLogger *sharedInstance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -71,44 +72,35 @@
     self.locationManager = [[CLLocationManager alloc] init];
     self.locationManager.desiredAccuracy = kCLLocationAccuracyBest;
     self.locationManager.delegate = self;
-    
 }
 
 - (void)startLogging:(NSNotification *) note
 {
+    //Starting background task for timer
     if ( self.logEnabled) {
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-            [self updateLocation];
+            //Start location update if app trying to terminate
+            [self.locationManager startUpdatingLocation];
             self.logUpdate = NO;
         }];
+    //Timer for start updating location every CHECK_TIME_INTERVAL seconds when app is in the background
         self.timer = [NSTimer scheduledTimerWithTimeInterval:CHECK_TIME_INTERVAL
-                                                    target:self
-                                                    selector:@selector(updateLocation)
+                                                    target:self.locationManager
+                                                    selector:@selector(startUpdatingLocation)
                                                     userInfo:nil
                                                     repeats:YES];
-        
     }
-    
-    
-}
-
-- (void)updateLocation
-{
-    [self.locationManager startUpdatingLocation];
 }
 
 - (void)stopLogging:(NSNotification *) note
 {
     [self.timer invalidate];
-    
 }
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations
 {
     if (self.logUpdate) {
-        
         NSLog(@"%@", [locations lastObject]);
-        
     } else {
         self.logUpdate = YES;
     }
@@ -118,7 +110,7 @@
 }
 
 
-//KVO method observing for a status of checkbox state
+//KVO method observing for a checkbox state
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
     NSNumber *checkStatus = [change objectForKey:@"new"];
